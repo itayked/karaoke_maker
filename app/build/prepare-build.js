@@ -237,8 +237,22 @@ async function stepPython() {
   log("python: extracting...");
   ensureDir(PY_DIR);
   // python-build-standalone tarball has a `python/` top-level dir; we want
-  // its contents directly in PY_DIR. Use tar to extract with --strip-components=1.
-  run("tar", ["-xzf", tgz, "-C", PY_DIR, "--strip-components=1"]);
+  // its contents directly in PY_DIR. `--strip-components=1` handles that.
+  //
+  // On Windows the `tar` on PATH is usually GNU tar (from Git Bash), which
+  // by default interprets `S:\path` as `host:path` and tries to DNS-resolve
+  // "S". `--force-local` opts out of that; forward-slash paths help too.
+  // The MS-shipped bsdtar accepts `--force-local` as a no-op flag, so this
+  // works on either implementation.
+  const posix = (p) => p.replace(/\\/g, "/");
+  run("tar", [
+    "--force-local",
+    "-xzf",
+    posix(tgz),
+    "-C",
+    posix(PY_DIR),
+    "--strip-components=1",
+  ]);
   if (!exists(PY_EXE)) {
     throw new Error(`python.exe not found in extracted tarball: ${PY_DIR}`);
   }
