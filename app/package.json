@@ -55,11 +55,12 @@
     "asar": true,
     "asarUnpack": [],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [{ "target": "nsis-web", "arch": ["x64"] }],
       "icon": "build/icon.ico",
       "artifactName": "KaraokeSetup-${version}.${ext}"
     },
-    "nsis": {
+    "nsisWeb": {
+      "appPackageUrl": "https://INSERT_PAYLOAD_URL_HERE",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

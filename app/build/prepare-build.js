@@ -41,7 +41,11 @@ const PYTHON_STANDALONE_ASSET_RE =
 const TORCH_INDEX = "https://download.pytorch.org/whl/cu121";
 const TORCH_PACKAGES = ["torch==2.4.1", "torchaudio==2.4.1"];
 
-const WHISPER_MODELS = ["small", "medium"]; // large-v3 is downloaded on first launch
+// Only small is bundled. medium + large-v3 are downloaded on first launch
+// when the user's VRAM warrants them (see renderer's first-launch flow).
+// Keeps the installer payload small enough for NSIS's 32-bit mmap ceiling
+// and avoids shipping a 1.5GB model most low-VRAM users won't actually use.
+const WHISPER_MODELS = ["small"];
 
 const FFMPEG_URL =
   "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
@@ -379,6 +383,144 @@ print('ffmpeg.exe extracted')
   if (!exists(target)) throw new Error("ffmpeg.exe extraction failed");
 }
 
+function dirSize(p) {
+  let total = 0;
+  try {
+    for (const entry of fs.readdirSync(p, { withFileTypes: true })) {
+      const f = path.join(p, entry.name);
+      if (entry.isDirectory()) total += dirSize(f);
+      else if (entry.isFile()) {
+        try { total += fs.statSync(f).size; } catch {}
+      }
+    }
+  } catch {}
+  return total;
+}
+
+function fmtBytes(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + " GB";
+  if (n >= 1e6) return Math.round(n / 1e6) + " MB";
+  if (n >= 1e3) return Math.round(n / 1e3) + " KB";
+  return n + " B";
+}
+
+function walkFiles(root, fn) {
+  if (!exists(root)) return;
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const f = path.join(root, entry.name);
+    if (entry.isDirectory()) walkFiles(f, fn);
+    else if (entry.isFile()) fn(f);
+  }
+}
+
+function rmAllNamed(root, name) {
+  if (!exists(root)) return 0;
+  let count = 0;
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      const p = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === name) {
+          fs.rmSync(p, { recursive: true, force: true });
+          count++;
+        } else {
+          stack.push(p);
+        }
+      }
+    }
+  }
+  return count;
+}
+
+function stepSlim() {
+  // Order matters: report total size before and after, listing each cut.
+  // Targets are runtime-irrelevant artefacts:
+  //   - torch's .lib static-link archives (compile-time only)
+  //   - C++ headers under torch/include
+  //   - .pdb debug symbols
+  //   - Tk/tkinter (we never use a Python GUI)
+  //   - Lib/test, Lib/idlelib, Lib/ensurepip (stdlib bits we don't ship)
+  //   - All __pycache__/ directories (regenerated on first use)
+  const before = dirSize(STAGE_DIR);
+  log(`slim: build-staging size before = ${fmtBytes(before)}`);
+
+  const torchDir = path.join(PY_DIR, "Lib", "site-packages", "torch");
+  const torchLib = path.join(torchDir, "lib");
+
+  // 1. torch/lib/*.lib  — static archives (linking only)
+  if (exists(torchLib)) {
+    let count = 0, bytes = 0;
+    for (const name of fs.readdirSync(torchLib)) {
+      if (name.endsWith(".lib")) {
+        const p = path.join(torchLib, name);
+        try { bytes += fs.statSync(p).size; fs.unlinkSync(p); count++; } catch {}
+      }
+    }
+    log(`slim:   torch/lib/*.lib removed (${count} files, ${fmtBytes(bytes)})`);
+  }
+
+  // 2. torch/include — C++ headers, never used at runtime by Python imports
+  const torchInc = path.join(torchDir, "include");
+  if (exists(torchInc)) {
+    const s = dirSize(torchInc);
+    fs.rmSync(torchInc, { recursive: true, force: true });
+    log(`slim:   torch/include removed (${fmtBytes(s)})`);
+  }
+
+  // 3. tcl / tkinter
+  for (const p of [
+    path.join(PY_DIR, "tcl"),
+    path.join(PY_DIR, "Lib", "tkinter"),
+  ]) {
+    if (exists(p)) {
+      const s = dirSize(p);
+      fs.rmSync(p, { recursive: true, force: true });
+      log(`slim:   ${path.relative(PY_DIR, p)} removed (${fmtBytes(s)})`);
+    }
+  }
+  for (const f of ["tcl86t.dll", "tk86t.dll"]) {
+    const p = path.join(PY_DIR, "DLLs", f);
+    if (exists(p)) {
+      const s = fs.statSync(p).size;
+      fs.unlinkSync(p);
+      log(`slim:   DLLs/${f} removed (${fmtBytes(s)})`);
+    }
+  }
+
+  // 4. Lib/ensurepip + Lib/idlelib (no longer needed after build)
+  for (const sub of ["ensurepip", "idlelib", "test", "turtledemo"]) {
+    const p = path.join(PY_DIR, "Lib", sub);
+    if (exists(p)) {
+      const s = dirSize(p);
+      fs.rmSync(p, { recursive: true, force: true });
+      log(`slim:   Lib/${sub} removed (${fmtBytes(s)})`);
+    }
+  }
+
+  // 5. .pdb debug symbols anywhere under python/
+  let pdbCount = 0, pdbBytes = 0;
+  walkFiles(PY_DIR, (f) => {
+    if (f.endsWith(".pdb")) {
+      try { pdbBytes += fs.statSync(f).size; fs.unlinkSync(f); pdbCount++; } catch {}
+    }
+  });
+  if (pdbCount) log(`slim:   ${pdbCount} .pdb files removed (${fmtBytes(pdbBytes)})`);
+
+  // 6. __pycache__ directories — regenerated on first use
+  const pycacheCount = rmAllNamed(PY_DIR, "__pycache__");
+  log(`slim:   ${pycacheCount} __pycache__ dirs removed`);
+
+  const after = dirSize(STAGE_DIR);
+  log(
+    `slim: build-staging size after  = ${fmtBytes(after)} ` +
+    `(saved ${fmtBytes(before - after)})`
+  );
+}
+
 // ---- utility ---------------------------------------------------------------
 
 function rmIfExists(p) {
@@ -411,6 +553,7 @@ function copyDirSync(src, dst) {
   await stepWhisperModels();
   stepDemucsAndVad();
   await stepFfmpeg();
+  stepSlim();
 
   log("done. build-staging is ready for `electron-builder`.");
 })().catch((err) => {

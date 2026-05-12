@@ -123,18 +123,23 @@ npm run dist
 
 What `prepare-build` does (idempotent — re-runs skip work already done; safe to resume after a failed download):
 
-1. Downloads python-build-standalone 3.11 (Windows x64 install-only) and extracts to `build-staging/python/`.
+1. Downloads python-build-standalone 3.11 (Windows x64 install-only) and extracts to `build-staging/python/`. Falls back to GitHub releases API for the latest 3.11 install_only asset if the pinned URL has been retired.
 2. Bootstraps pip in that interpreter.
 3. Installs `torch==2.4.1 + torchaudio==2.4.1` from `download.pytorch.org/whl/cu121`.
 4. Installs the rest of `sidecar/requirements.txt` (torch/torchaudio/pytest/ruff stripped — `torch` because we already installed the CUDA build, dev tools because they don't ship).
 5. Copies `sidecar/karaoke/` into `build-staging/sidecar/` (no `.venv`, no `tests/`).
-6. Downloads Whisper `small` + `medium` `.pt` files via URLs pulled from `whisper._MODELS` (so we never drift from upstream).
+6. Downloads the Whisper `small` `.pt` file (only model bundled — medium and large-v3 download on first launch when VRAM warrants).
 7. Pre-warms Demucs htdemucs + Silero VAD into `build-staging/models/`.
 8. Downloads FFmpeg "release essentials" zip from gyan.dev, extracts `ffmpeg.exe` into `build-staging/bin/`.
+9. **Slims** the staging: removes `torch/lib/*.lib` static archives, `torch/include` headers, `tcl/`+`tkinter/` (no Python GUI), `Lib/ensurepip`+`Lib/idlelib`+`Lib/test`, `.pdb` debug symbols, and all `__pycache__/` directories. Roughly 1GB saved.
 
-`electron-builder` then picks the staged tree up via `extraResources` and produces an NSIS installer at `app/dist/KaraokeSetup-x.y.z.exe`.
+`electron-builder` then picks the staged tree up via `extraResources` and produces an **NSIS web installer**:
+- `app/dist/KaraokeSetup-x.y.z.exe` — small stub (~5–10MB) that goes to GitHub Releases
+- `app/dist/Karaoke-x.y.z-x64.nsis.7z` — the actual payload (~3–4GB) that hosts on Google Drive or similar
 
-**Expected**: build time ~25–45 min on first run (most of that is downloads + pip installing torch CUDA wheels). Installer size ~4.5–5.5GB.
+The stub installer fetches the payload at install time from the URL configured in `package.json → build.nsisWeb.appPackageUrl`. After every rebuild **update that URL** to point at wherever the new payload is hosted before publishing.
+
+**Expected**: build time ~15–25 min on first run. Stub <10MB, payload ~3.5GB.
 
 **Prerequisites**: Node 20+, `tar` on PATH (Windows 10+ ships it as a built-in), an internet connection. **No system Python required** — `prepare-build` brings its own.
 

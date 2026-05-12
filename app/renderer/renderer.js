@@ -197,15 +197,27 @@ async function runFirstLaunchFlow() {
   }
 
   const vram = health.vram_mb || 0;
+  // Pick the model to download (if any) based on VRAM. small is bundled and
+  // always available; medium and large-v3 are fetched on demand.
+  let downloadSize = null;
+  let downloadLabel = null;
   if (health.cuda_available && vram >= 6000) {
-    status.textContent = "מוריד את המודל הגדול ל-GPU שלך";
+    downloadSize = "large-v3";
+    downloadLabel = "מוריד את המודל הגדול ל-GPU שלך (≈2.9 GB)";
+  } else if (health.cuda_available && vram >= 4000) {
+    downloadSize = "medium";
+    downloadLabel = "מוריד מודל בינוני ל-GPU שלך (≈1.5 GB)";
+  }
+
+  if (downloadSize) {
+    status.textContent = downloadLabel;
     detail.textContent = `${health.gpu_name} · ${(vram / 1024).toFixed(1)} GB VRAM`;
     bar.classList.add("active");
     fill.style.width = "0%";
     try {
-      await downloadLargeModel(fill, detail);
+      await downloadModel(downloadSize, fill, detail);
       status.textContent = "מוכן";
-      detail.textContent = "המודל הגדול הותקן בהצלחה";
+      detail.textContent = `המודל (${downloadSize}) הותקן בהצלחה`;
     } catch (e) {
       status.textContent = "ההורדה נכשלה";
       detail.textContent = `${e.message} — נמשיך עם המודל המובנה. אפשר להוריד שוב מאוחר יותר.`;
@@ -213,7 +225,7 @@ async function runFirstLaunchFlow() {
     bar.classList.remove("active");
   } else if (health.cuda_available) {
     status.textContent = "מוכן";
-    detail.textContent = `${health.gpu_name || "GPU"} · ${(vram / 1024).toFixed(1)} GB VRAM — משתמש במודל ה-medium המובנה`;
+    detail.textContent = `${health.gpu_name || "GPU"} · ${(vram / 1024).toFixed(1)} GB VRAM — משתמש במודל ה-small המובנה`;
   } else {
     status.textContent = "מוכן";
     detail.textContent = "לא נמצא GPU של NVIDIA — האפליקציה תרוץ על מעבד (איטי יותר). השתמש במודל ה-small המובנה.";
@@ -227,13 +239,13 @@ async function runFirstLaunchFlow() {
   showView("form");
 }
 
-async function downloadLargeModel(fillEl, detailEl) {
+async function downloadModel(size, fillEl, detailEl) {
   const port = state.sidecarPort;
   // Kick off the download. 'already-installed' / 'already-running' are OK.
   const start = await fetch(`http://127.0.0.1:${port}/models/download`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ size: "large-v3" }),
+    body: JSON.stringify({ size }),
   });
   if (!start.ok) throw new Error(`POST /models/download ${start.status}`);
 
@@ -242,8 +254,8 @@ async function downloadLargeModel(fillEl, detailEl) {
     await new Promise((r) => setTimeout(r, 600));
     const r = await fetch(`http://127.0.0.1:${port}/models/status`);
     const body = await r.json();
-    const m = body.models.find((x) => x.size === "large-v3");
-    if (!m) throw new Error("models/status missing large-v3 entry");
+    const m = body.models.find((x) => x.size === size);
+    if (!m) throw new Error(`models/status missing ${size} entry`);
     if (m.state === "installed") return;
     if (m.state === "downloading") {
       const pct = Math.round((m.progress || 0) * 100);
