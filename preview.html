@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="he">
+<head>
+<meta charset="utf-8" />
+<title>Karaoke preview (QA)</title>
+<style>
+  :root {
+    --bg: #0e0e10;
+    --fg: #e5e5e5;
+    --muted: #6b6b75;
+    --accent: #ffd33d;
+    --accent-fg: #1a1a1a;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    height: 100%;
+    overflow: hidden;
+  }
+  body { display: flex; flex-direction: column; height: 100vh; }
+
+  #controls {
+    padding: 10px 14px;
+    border-bottom: 1px solid #222;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+  #controls label { display: flex; gap: 6px; align-items: center; }
+  #controls input[type="file"] { color: var(--fg); font-size: 12px; }
+  audio { width: 360px; }
+
+  #stage {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    scroll-behavior: smooth;
+  }
+  #lyrics {
+    direction: rtl;
+    text-align: center;
+    padding: 50vh 24px;       /* half-viewport top/bottom so any line can center */
+    font-size: 32px;
+    line-height: 1.55;
+  }
+
+  .line {
+    transition: transform 220ms ease, opacity 220ms ease, color 220ms ease;
+    transform: scale(0.78);
+    opacity: 0.35;
+    margin: 14px 0;
+    will-change: transform, opacity;
+  }
+  .line.current {
+    transform: scale(1.18);
+    opacity: 1;
+    color: #fff;
+  }
+  .line.gap {
+    height: 18px;
+    margin: 6px 0;
+  }
+
+  .word {
+    display: inline-block;
+    padding: 2px 6px;
+    margin: 0 2px;
+    border-radius: 6px;
+    transition: background-color 80ms linear, color 80ms linear;
+  }
+  .word.active {
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+
+  #debug {
+    border-top: 1px solid #222;
+    padding: 6px 14px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  #debug b { color: var(--fg); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <label>WAV: <input type="file" id="audioInput" accept=".wav,audio/*" /></label>
+  <label>JSON: <input type="file" id="jsonInput" accept=".json,application/json" /></label>
+  <audio id="audio" controls preload="metadata"></audio>
+</div>
+
+<div id="stage">
+  <div id="lyrics"></div>
+</div>
+
+<div id="debug">
+  <span>t=<b id="dbg-t">0.000</b>s</span>
+  <span>line=<b id="dbg-line">-</b></span>
+  <span>word=<b id="dbg-word">-</b></span>
+  <span>lines=<b id="dbg-total-lines">0</b></span>
+  <span>dur=<b id="dbg-dur">0</b>s</span>
+</div>
+
+<script>
+(() => {
+  const audio       = document.getElementById("audio");
+  const audioInput  = document.getElementById("audioInput");
+  const jsonInput   = document.getElementById("jsonInput");
+  const lyricsEl    = document.getElementById("lyrics");
+  const stage       = document.getElementById("stage");
+  const dbgT        = document.getElementById("dbg-t");
+  const dbgLine     = document.getElementById("dbg-line");
+  const dbgWord     = document.getElementById("dbg-word");
+  const dbgTotal    = document.getElementById("dbg-total-lines");
+  const dbgDur      = document.getElementById("dbg-dur");
+
+  let data = null;
+  // Per-line DOM references; for empty lines, words is [].
+  let lineEls = [];     // HTMLElement[]
+  let wordEls = [];     // HTMLElement[][]  (lineEls[i] -> wordEls[i][j])
+  let currentLine = -1;
+  let currentWord = -1;
+
+  audioInput.addEventListener("change", e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    audio.src = URL.createObjectURL(f);
+  });
+
+  jsonInput.addEventListener("change", async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const text = await f.text();
+    data = JSON.parse(text);
+    render(data);
+  });
+
+  function render(d) {
+    lyricsEl.innerHTML = "";
+    lineEls = [];
+    wordEls = [];
+    currentLine = -1;
+    currentWord = -1;
+
+    d.lines.forEach((line, li) => {
+      const el = document.createElement("div");
+      if (line.is_empty) {
+        el.className = "line gap";
+        lineEls.push(el);
+        wordEls.push([]);
+        lyricsEl.appendChild(el);
+        return;
+      }
+      el.className = "line";
+      const ws = [];
+      (line.words || []).forEach(w => {
+        const span = document.createElement("span");
+        span.className = "word";
+        span.textContent = w.text;
+        el.appendChild(span);
+        ws.push(span);
+      });
+      lineEls.push(el);
+      wordEls.push(ws);
+      lyricsEl.appendChild(el);
+    });
+
+    dbgTotal.textContent = d.lines.length;
+    dbgDur.textContent = (d.duration_seconds || 0).toFixed(2);
+  }
+
+  function findLineIndex(t) {
+    if (!data) return -1;
+    // Linear scan; lyrics are short.
+    for (let i = 0; i < data.lines.length; i++) {
+      const ln = data.lines[i];
+      if (ln.is_empty) continue;
+      if (t >= ln.start && t <= ln.end) return i;
+    }
+    // Between lines — pick the most-recent non-empty line that started before t.
+    let best = -1;
+    for (let i = 0; i < data.lines.length; i++) {
+      const ln = data.lines[i];
+      if (ln.is_empty) continue;
+      if (ln.start <= t) best = i;
+      else break;
+    }
+    return best;
+  }
+
+  function findWordIndex(line, t) {
+    if (!line || line.is_empty) return -1;
+    for (let j = 0; j < line.words.length; j++) {
+      const w = line.words[j];
+      if (t >= w.start && t <= w.end) return j;
+    }
+    return -1;
+  }
+
+  function setCurrentLine(li) {
+    if (li === currentLine) return;
+    if (currentLine >= 0 && lineEls[currentLine]) {
+      lineEls[currentLine].classList.remove("current");
+    }
+    currentLine = li;
+    if (li >= 0 && lineEls[li]) {
+      lineEls[li].classList.add("current");
+      // Center the line in the viewport.
+      const el = lineEls[li];
+      const stageRect = stage.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const offset = (elRect.top - stageRect.top)
+                   + el.offsetHeight / 2
+                   - stage.clientHeight / 2;
+      stage.scrollBy({ top: offset, behavior: "smooth" });
+    }
+  }
+
+  function setCurrentWord(li, wj) {
+    if (li === currentLine && wj === currentWord) return;
+    if (currentLine >= 0 && currentWord >= 0) {
+      const prev = wordEls[currentLine] && wordEls[currentLine][currentWord];
+      if (prev) prev.classList.remove("active");
+    }
+    currentWord = wj;
+    if (li >= 0 && wj >= 0) {
+      const el = wordEls[li] && wordEls[li][wj];
+      if (el) el.classList.add("active");
+    }
+  }
+
+  function tick() {
+    requestAnimationFrame(tick);
+    if (!data) return;
+    const t = audio.currentTime || 0;
+    dbgT.textContent = t.toFixed(3);
+
+    const li = findLineIndex(t);
+    if (li !== currentLine) setCurrentLine(li);
+
+    const wj = li >= 0 ? findWordIndex(data.lines[li], t) : -1;
+    setCurrentWord(li, wj);
+
+    dbgLine.textContent = li >= 0 ? li : "-";
+    dbgWord.textContent = wj >= 0 ? wj : "-";
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

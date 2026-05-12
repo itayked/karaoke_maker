@@ -1,0 +1,73 @@
+{
+  "name": "karaoke-app",
+  "productName": "Karaoke",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hebrew karaoke desktop app — Electron shell + Python sidecar.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "prepare-build": "node build/prepare-build.js",
+    "build": "electron-builder",
+    "dist": "npm run prepare-build && npm run build"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.5"
+  },
+  "build": {
+    "appId": "com.tayked.karaoke",
+    "productName": "Karaoke",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**",
+      "build/icon.*",
+      "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "../build-staging/python",
+        "to": "python",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../build-staging/sidecar",
+        "to": "sidecar",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../build-staging/models",
+        "to": "models",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../build-staging/bin",
+        "to": "bin",
+        "filter": ["**/*"]
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
+      "artifactName": "KaraokeSetup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Karaoke",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

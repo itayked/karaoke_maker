@@ -1,0 +1,500 @@
+/* Karaoke shell — typographic-poster ("Concrete") design system.
+   Palette is set via CSS custom properties on :root and swapped at runtime
+   from the in-player swatch button. */
+
+:root {
+  --cc-bg:   #EBBE3F;
+  --cc-ink:  #14110D;
+  --cc-warm: rgba(255,239,180,0.5);
+  --cc-cool: rgba(56,38,8,0.10);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  background: var(--cc-bg);
+  color: var(--cc-ink);
+  font-family: 'Rubik', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Vignette — same two-radial recipe as the design. Pinned to the whole
+   shell so it's consistent across form / progress / player. */
+body::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 100% 70% at 50% 30%, var(--cc-warm) 0%, transparent 60%),
+    radial-gradient(ellipse 100% 100% at 50% 100%, var(--cc-cool) 0%, transparent 55%);
+}
+
+.view {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.view.active { display: flex; }
+
+/* ============================================================
+   Shared chrome — back button + masthead share styling across
+   views, mirrored from the design.
+   ============================================================ */
+
+.chrome-back {
+  position: absolute; top: 28px; left: 36px; z-index: 5;
+  display: flex; align-items: center; gap: 6px;
+  background: transparent; border: 0; padding: 4px 0;
+  font: 500 13px 'Rubik', sans-serif;
+  color: var(--cc-ink);
+  cursor: pointer;
+  border-bottom: 1.5px solid var(--cc-ink);
+}
+.chrome-back-icon { font-weight: 700; }
+
+.chrome-masthead {
+  position: absolute; top: 28px; right: 36px; z-index: 5;
+  display: flex; align-items: center; gap: 12px;
+  font: 500 13px 'Rubik', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================
+   Welcome / first-launch view
+   ============================================================ */
+
+#view-welcome {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 92px 84px;
+  text-align: right;
+}
+.welcome-shell {
+  max-width: 720px;
+  width: 100%;
+  direction: rtl;
+}
+.welcome-eyebrow {
+  font: 500 12px 'Rubik', sans-serif;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cc-ink);
+  opacity: 0.6;
+  margin-bottom: 10px;
+}
+.welcome-title {
+  font: 900 96px 'Rubik', sans-serif;
+  letter-spacing: -0.03em;
+  line-height: 0.96;
+  color: var(--cc-ink);
+  margin: 0 0 28px;
+}
+.welcome-status {
+  font: 700 22px 'Rubik', sans-serif;
+  color: var(--cc-ink);
+  margin: 0 0 16px;
+}
+.welcome-progress {
+  display: none;
+  position: relative;
+  height: 4px;
+  background: var(--cc-ink);
+  opacity: 0.22;
+  margin: 8px 0 12px;
+  max-width: 480px;
+}
+.welcome-progress.active { display: block; opacity: 1; background: transparent; }
+.welcome-progress.active::before {
+  content: ''; position: absolute; inset: 0; background: var(--cc-ink); opacity: 0.22;
+}
+.welcome-progress-fill {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 0%;
+  background: var(--cc-ink);
+  transition: width 0.3s ease-out;
+}
+.welcome-detail {
+  font: 500 13px 'Rubik', sans-serif;
+  color: var(--cc-ink);
+  opacity: 0.6;
+  margin: 0 0 28px;
+  min-height: 18px;
+}
+.welcome-btn {
+  display: none;
+  padding: 12px 24px;
+  background: var(--cc-ink);
+  color: var(--cc-bg);
+  border: 0;
+  font: 900 16px 'Rubik', sans-serif;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.welcome-btn.active { display: inline-block; }
+.welcome-btn:hover { filter: brightness(1.15); }
+
+/* ============================================================
+   Form view — URL + lyrics + create button
+   ============================================================ */
+
+#view-form {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 92px 84px 132px;
+}
+#view-form .form-shell {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+#view-form .form-label {
+  font: 500 11px 'Rubik', sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cc-ink);
+  opacity: 0.55;
+}
+
+#url-input,
+#lyrics-input {
+  font: 500 18px 'Rubik', sans-serif;
+  color: var(--cc-ink);
+  background: transparent;
+  border: 1.5px solid var(--cc-ink);
+  padding: 12px 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+#url-input { width: 100%; direction: ltr; text-align: left; }
+#lyrics-input {
+  width: 100%;
+  min-height: 280px;
+  resize: vertical;
+  direction: rtl;
+  font-size: 20px;
+  line-height: 1.6;
+}
+#url-input:focus,
+#lyrics-input:focus {
+  outline: 2px dashed var(--cc-ink);
+  outline-offset: 3px;
+}
+#url-input::placeholder,
+#lyrics-input::placeholder {
+  color: var(--cc-ink);
+  opacity: 0.35;
+}
+
+#submit-btn {
+  align-self: flex-start;
+  padding: 12px 22px;
+  background: var(--cc-ink);
+  color: var(--cc-bg);
+  border: 0;
+  font: 900 16px 'Rubik', sans-serif;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+#submit-btn:hover:not(:disabled) { filter: brightness(1.15); }
+#submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#status-info {
+  position: absolute; bottom: 28px; right: 36px;
+  font: 500 11px 'Rubik', sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cc-ink);
+  opacity: 0.5;
+}
+
+/* ============================================================
+   Progress view — big Hebrew stage label, ink rule
+   ============================================================ */
+
+#view-progress {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 92px 84px 132px;
+}
+#stage-label {
+  font: 900 56px 'Rubik', sans-serif;
+  letter-spacing: -0.02em;
+  line-height: 1.04;
+  color: var(--cc-ink);
+  max-width: 800px;
+  direction: rtl;
+}
+#stage-sub {
+  margin-top: 18px;
+  font: 500 13px 'Rubik', sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cc-ink);
+  opacity: 0.55;
+  direction: rtl;
+}
+#progress-error {
+  margin-top: 28px;
+  max-width: 720px;
+  font: 500 14px 'Rubik', sans-serif;
+  color: var(--cc-ink);
+  background: var(--cc-ink);
+  color: var(--cc-bg);
+  padding: 12px 16px;
+  white-space: pre-wrap;
+  display: none;
+  direction: rtl;
+}
+#progress-error.active { display: block; }
+#reset-btn {
+  margin-top: 16px;
+  padding: 10px 18px;
+  background: transparent;
+  color: var(--cc-ink);
+  border: 1.5px solid var(--cc-ink);
+  font: 700 13px 'Rubik', sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  display: none;
+}
+#reset-btn.active { display: inline-block; }
+#reset-btn:hover { background: var(--cc-ink); color: var(--cc-bg); }
+
+/* ============================================================
+   Player view — Concrete (lifted from the design)
+   ============================================================ */
+
+.concrete {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Rubik', sans-serif;
+  color: var(--cc-ink);
+}
+
+.concrete__song {
+  color: var(--cc-ink);
+  max-width: 50ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+/* Stage + lyrics */
+
+.concrete__stage {
+  position: absolute; left: 0; right: 0;
+  top: 92px; bottom: 132px;
+  padding: 0 84px;
+  overflow: hidden;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
+}
+.concrete__lyrics {
+  position: absolute;
+  left: 84px; right: 84px;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  gap: 4px;
+  transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.cc-line {
+  line-height: 1.02;
+  transition: opacity 0.45s, font-size 0.45s;
+  padding: 4px 0;
+  color: var(--cc-ink);
+}
+.cc-line .cc-word { display: inline-block; }
+.cc-line .cc-word + .cc-word { margin-right: 0.28em; }
+
+.cc-line--past {
+  font-weight: 500; font-size: 22px;
+  opacity: 0.28;
+  letter-spacing: -0.01em;
+}
+.cc-line--past[data-rel="-1"] { font-size: 26px; opacity: 0.42; }
+
+.cc-line--upcoming {
+  font-weight: 500; font-size: 22px;
+  opacity: 0.46;
+  letter-spacing: -0.01em;
+}
+.cc-line--upcoming[data-rel="1"] { font-size: 28px; opacity: 0.66; }
+
+.cc-line--current {
+  font-weight: 900;
+  font-size: 78px;
+  letter-spacing: -0.025em;
+  line-height: 0.98;
+  margin: 14px 0 18px;
+}
+.cc-line--current .cc-word--sung    { color: var(--cc-ink); }
+.cc-line--current .cc-word--upcoming { color: var(--cc-ink); opacity: 0.28; }
+.cc-line--current .cc-word--active {
+  position: relative;
+  color: var(--cc-ink);
+  padding: 0 0.04em;
+}
+.cc-word__base    { display: inline-block; position: relative; z-index: 1; }
+.cc-word__block {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background: var(--cc-ink);
+  display: flex; align-items: stretch; justify-content: stretch;
+  will-change: clip-path;
+  z-index: 2;
+  padding: 0 0.04em;
+  transform: translateY(2px);
+}
+.cc-word__inverse { display: inline-block; color: var(--cc-bg); }
+
+.cc-empty { height: 22px; }
+
+/* In-player palette picker (bottom-left) */
+
+.concrete__palette {
+  position: absolute; bottom: 130px; left: 56px; z-index: 6;
+}
+.concrete__palette-btn {
+  display: flex; padding: 0;
+  width: 36px; height: 36px;
+  background: var(--cc-bg);
+  border: 1.5px solid var(--cc-ink);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.concrete__palette-btn:hover { transform: scale(1.06); }
+.concrete__palette-btn > span { flex: 1; display: block; }
+
+.concrete__palette-pop {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  padding: 10px 12px;
+  background: var(--cc-bg);
+  border: 1.5px solid var(--cc-ink);
+  box-shadow: 6px 6px 0 var(--cc-ink);
+  min-width: 240px;
+  display: none;
+}
+.concrete__palette.open .concrete__palette-pop { display: block; }
+.concrete__palette-label {
+  font: 700 10px 'Rubik', sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cc-ink);
+  opacity: 0.6;
+  margin-bottom: 8px;
+  direction: rtl;
+}
+.concrete__palette-row { display: flex; gap: 6px; }
+.concrete__palette-chip {
+  width: 26px; height: 36px;
+  display: flex; flex-direction: column;
+  padding: 0;
+  background: transparent;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s;
+}
+.concrete__palette-chip:hover { transform: translateY(-2px); }
+.concrete__palette-chip > span { flex: 1; display: block; }
+.concrete__palette-chip[data-on="1"] {
+  border-color: var(--cc-ink);
+  outline: 2px solid var(--cc-bg);
+  outline-offset: 1px;
+}
+
+/* Bottom controls */
+
+.concrete__controls {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+}
+.concrete__rule { height: 3px; background: var(--cc-ink); }
+.concrete__controls-inner {
+  display: flex; align-items: center; gap: 28px;
+  padding: 16px 36px 22px;
+}
+.concrete__transport { display: flex; gap: 6px; }
+.concrete__btn {
+  width: 36px; height: 36px;
+  background: transparent;
+  border: 1.5px solid var(--cc-ink);
+  color: var(--cc-ink);
+  display: grid; place-items: center;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.concrete__btn:hover { background: var(--cc-ink); color: var(--cc-bg); }
+.concrete__btn--play { background: var(--cc-ink); color: var(--cc-bg); }
+.concrete__btn--play:hover { filter: brightness(1.15); }
+
+.concrete__scrub { display: flex; align-items: center; gap: 14px; flex: 1; }
+.concrete__time {
+  font: 700 13px 'Rubik', sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--cc-ink);
+  min-width: 38px;
+}
+.concrete__scrub .concrete__time:first-of-type { text-align: right; }
+.concrete__bar {
+  position: relative;
+  flex: 1;
+  height: 22px;
+  cursor: pointer;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+}
+.concrete__bar:focus-visible { outline: 2px dashed var(--cc-ink); outline-offset: 4px; }
+.concrete__bar-track {
+  position: absolute; left: 0; right: 0; top: 50%;
+  height: 4px; transform: translateY(-50%);
+  background: var(--cc-ink); opacity: 0.22;
+  pointer-events: none;
+}
+.concrete__bar-fill {
+  position: absolute; right: 0; top: 50%;
+  height: 4px; transform: translateY(-50%);
+  background: var(--cc-ink);
+  pointer-events: none;
+}
+.concrete__bar-knob {
+  position: absolute; top: 50%;
+  width: 14px; height: 14px;
+  transform: translateY(-50%);
+  background: var(--cc-ink);
+  border: 0; border-radius: 0;
+  pointer-events: none;
+  transition: transform 0.15s ease;
+}
+.concrete__bar:hover .concrete__bar-knob,
+.concrete__bar:active .concrete__bar-knob {
+  transform: translateY(-50%) scale(1.18);
+}

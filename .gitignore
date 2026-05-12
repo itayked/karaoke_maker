@@ -1,0 +1,45 @@
+# --- Python ---
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+**/.venv/
+**/venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+
+# --- Node / Electron ---
+**/node_modules/
+*.tsbuildinfo
+
+# --- Env / secrets ---
+.env
+.env.local
+.env.*.local
+
+# --- Build artefacts (5GB+ — host installer on Google Drive / GH Releases) ---
+build-staging/
+build-tmp/
+app/build-staging/
+app/build-tmp/
+app/dist/
+
+# --- Local-only dev / test artefacts ---
+sidecar/out/
+sidecar/job_request.json
+sidecar/show_lines.py
+sidecar/test_lyrics.txt
+*.wav
+*.mp3
+*.m4a
+
+# --- Logs / temp ---
+*.log
+*.tmp
+
+# --- Editor / OS junk ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

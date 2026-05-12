@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               connect-src http://127.0.0.1:*;
+               media-src http://127.0.0.1:*;
+               img-src https://i.ytimg.com https://*.ytimg.com data:;
+               style-src 'self' https://fonts.googleapis.com 'unsafe-inline';
+               script-src 'self';
+               font-src https://fonts.gstatic.com;" />
+<title>Karaoke</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<!-- ============ WELCOME / FIRST-LAUNCH VIEW ============ -->
+<div id="view-welcome" class="view">
+  <div class="welcome-shell">
+    <div class="welcome-eyebrow">ברוכים הבאים</div>
+    <h1 class="welcome-title">קריוקי</h1>
+    <p id="welcome-status" class="welcome-status">בודק חומרה...</p>
+    <div id="welcome-progress" class="welcome-progress">
+      <div id="welcome-progress-fill" class="welcome-progress-fill"></div>
+    </div>
+    <p id="welcome-detail" class="welcome-detail"></p>
+    <button id="welcome-continue" class="welcome-btn">המשך</button>
+  </div>
+</div>
+
+<!-- ============ FORM VIEW ============ -->
+<div id="view-form" class="view active">
+  <div class="form-shell">
+    <div class="form-label">URL</div>
+    <input id="url-input" type="text" placeholder="https://www.youtube.com/watch?v=..." dir="ltr" />
+
+    <div class="form-label" style="margin-top:10px">מילים</div>
+    <textarea id="lyrics-input" placeholder="הדבק את המילים כאן..."></textarea>
+
+    <button id="submit-btn" disabled>צור קריוקי</button>
+  </div>
+  <div id="status-info">מתחבר</div>
+</div>
+
+<!-- ============ PROGRESS VIEW ============ -->
+<div id="view-progress" class="view">
+  <div id="stage-label">מכין</div>
+  <div id="stage-sub">שלב</div>
+  <div id="progress-error"></div>
+  <button id="reset-btn">נסה שוב</button>
+</div>
+
+<!-- ============ PLAYER VIEW ============ -->
+<div id="view-player" class="view concrete" dir="rtl" lang="he">
+  <div class="chrome-masthead">
+    <span id="player-title" class="concrete__song"></span>
+  </div>
+  <button id="back-btn" class="chrome-back" aria-label="חזרה">
+    <span class="chrome-back-icon">←</span>
+    <span>חזרה</span>
+  </button>
+
+  <div class="concrete__stage" id="stage">
+    <div class="concrete__lyrics" id="lyrics"></div>
+  </div>
+
+  <!-- Palette picker (bottom-left swatch) -->
+  <div class="concrete__palette" id="palette">
+    <button class="concrete__palette-btn" id="palette-btn" type="button" aria-label="בחירת צבעים" aria-expanded="false">
+      <span id="palette-btn-bg"></span>
+      <span id="palette-btn-ink"></span>
+    </button>
+    <div class="concrete__palette-pop" id="palette-pop" role="listbox">
+      <div class="concrete__palette-label">צבעים</div>
+      <div class="concrete__palette-row" id="palette-row"></div>
+    </div>
+  </div>
+
+  <div class="concrete__controls">
+    <div class="concrete__rule"></div>
+    <div class="concrete__controls-inner">
+      <div class="concrete__transport">
+        <button class="concrete__btn" id="prev-btn" aria-label="הקודם">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM9.5 12l8.5 6V6z"/></svg>
+        </button>
+        <button class="concrete__btn concrete__btn--play" id="play-btn" aria-label="ניגון">
+          <svg id="play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z"/></svg>
+          <svg id="pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+        </button>
+        <button class="concrete__btn" id="next-btn" aria-label="הבא">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
+        </button>
+      </div>
+      <div class="concrete__scrub">
+        <span class="concrete__time" id="time-current">0:00</span>
+        <div class="concrete__bar" id="bar" role="slider" tabindex="0"
+             aria-label="מיקום בשיר" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+          <div class="concrete__bar-track"></div>
+          <div class="concrete__bar-fill" id="bar-fill" style="width:0%"></div>
+          <div class="concrete__bar-knob" id="bar-knob" style="right:calc(0% - 7px)"></div>
+        </div>
+        <span class="concrete__time" id="time-total">0:00</span>
+      </div>
+    </div>
+  </div>
+
+  <audio id="audio" preload="metadata"></audio>
+</div>
+
+<script src="./renderer.js"></script>
+</body>
+</html>
