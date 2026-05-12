@@ -26,9 +26,17 @@ const crypto = require("crypto");
 
 // ---- knobs ----------------------------------------------------------------
 
+// Pinned to a known-good 3.11 install_only release. python-build-standalone
+// retires older releases periodically, so if this URL 404s we fall through to
+// `resolvePythonStandaloneUrl()` which queries the GitHub releases API for the
+// latest 3.11 install_only Windows-x64 asset.
 const PYTHON_STANDALONE_URL =
   "https://github.com/astral-sh/python-build-standalone/releases/download/" +
-  "20240814/cpython-3.11.10+20240814-x86_64-pc-windows-msvc-install_only.tar.gz";
+  "20260510/cpython-3.11.15+20260510-x86_64-pc-windows-msvc-install_only.tar.gz";
+
+// Used by the fallback resolver — match install_only but NOT install_only_stripped.
+const PYTHON_STANDALONE_ASSET_RE =
+  /^cpython-3\.11\.\d+\+\d+-x86_64-pc-windows-msvc-install_only\.tar\.gz$/;
 
 const TORCH_INDEX = "https://download.pytorch.org/whl/cu121";
 const TORCH_PACKAGES = ["torch==2.4.1", "torchaudio==2.4.1"];
@@ -77,6 +85,72 @@ function run(cmd, args, opts = {}) {
 
 function py(args, opts = {}) {
   run(PY_EXE, args, opts);
+}
+
+function fetchJson(url, attempt = 1) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, { headers: { "User-Agent": "karaoke-build/0.1", "Accept": "application/vnd.github+json" } }, (res) => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+          res.resume();
+          return fetchJson(res.headers.location, attempt).then(resolve, reject);
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          if (attempt < 3) {
+            return setTimeout(() => fetchJson(url, attempt + 1).then(resolve, reject), 2000);
+          }
+          return reject(new Error(`HTTP ${res.statusCode} on ${url}`));
+        }
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (c) => { body += c; });
+        res.on("end", () => {
+          try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+        });
+      })
+      .on("error", (err) => {
+        if (attempt < 3) setTimeout(() => fetchJson(url, attempt + 1).then(resolve, reject), 2000);
+        else reject(err);
+      });
+  });
+}
+
+async function resolvePythonStandaloneUrl() {
+  log(
+    "python: pinned URL 404'd — querying GitHub releases API for the latest " +
+    "install_only Windows-x64 asset"
+  );
+  const release = await fetchJson(
+    "https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest"
+  );
+  log(`python: latest release is ${release.tag_name} (${release.published_at})`);
+  const asset = (release.assets || []).find((a) => PYTHON_STANDALONE_ASSET_RE.test(a.name));
+  if (!asset) {
+    throw new Error(
+      `no asset matching ${PYTHON_STANDALONE_ASSET_RE} in release ${release.tag_name}`
+    );
+  }
+  return asset.browser_download_url;
+}
+
+// HEAD an URL to confirm it's actually downloadable before we commit to it.
+function headOk(url, attempt = 1) {
+  return new Promise((resolve) => {
+    const req = https.request(url, { method: "HEAD", headers: { "User-Agent": "karaoke-build/0.1" } }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+        res.resume();
+        return headOk(res.headers.location, attempt).then(resolve);
+      }
+      res.resume();
+      resolve(res.statusCode >= 200 && res.statusCode < 300);
+    });
+    req.on("error", () => {
+      if (attempt < 2) setTimeout(() => headOk(url, attempt + 1).then(resolve), 1000);
+      else resolve(false);
+    });
+    req.end();
+  });
 }
 
 function downloadTo(url, dest, attempt = 1) {
@@ -137,6 +211,16 @@ function sha256File(p) {
 
 // ---- steps ----------------------------------------------------------------
 
+async function resolvePythonUrl() {
+  if (await headOk(PYTHON_STANDALONE_URL)) {
+    log(`python: using pinned URL ${PYTHON_STANDALONE_URL}`);
+    return PYTHON_STANDALONE_URL;
+  }
+  const resolved = await resolvePythonStandaloneUrl();
+  log(`python: using resolved URL ${resolved}`);
+  return resolved;
+}
+
 async function stepPython() {
   if (exists(PY_EXE)) {
     log("python: standalone interpreter already staged");
@@ -145,7 +229,10 @@ async function stepPython() {
   ensureDir(TMP_DIR);
   const tgz = path.join(TMP_DIR, "cpython.tar.gz");
   if (!exists(tgz)) {
-    await downloadTo(PYTHON_STANDALONE_URL, tgz);
+    const url = await resolvePythonUrl();
+    await downloadTo(url, tgz);
+  } else {
+    log(`python: tarball cached at ${tgz}, skipping download`);
   }
   log("python: extracting...");
   ensureDir(PY_DIR);
